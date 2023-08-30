@@ -134,14 +134,14 @@ proc next_generation(pop: PopulationRef) =
 # display population of genes
 
 proc display(pop: PopulationRef) =
-    erase_screen()
+  erase_screen()
 
-    echo fmt"generation: {pop.generation}", "\n"
+  echo fmt"generation: {pop.generation}", "\n"
 
-    for gene in pop.pool:
-      echo fmt"{gene.code} ({gene.cost})"
+  for gene in pop.pool:
+    echo fmt"{gene.code} ({gene.cost})"
 
-    echo "\n"
+  echo "\n"
 
 # create a gene population
 
