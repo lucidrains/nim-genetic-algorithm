@@ -24,7 +24,7 @@ proc randomize(gene: GeneRef, length: int) =
 
 # finds a random index in the code and adds or subtracts 1 from the ord randomly
 
-proc mutate(gene: GeneRef, prob: float) =
+proc mutate(gene: GeneRef) =
   let rand_index = rand(gene.code.len - 1)
   let mutation = (if rand(1.0) < 0.5: 1 else: -1)
 
@@ -104,7 +104,6 @@ proc next_generation(pop: PopulationRef) =
 
   if pop.generation == 0:
     init_population(pop)
-    pop.generation += 1
 
   # calculate fitness
 
@@ -122,7 +121,9 @@ proc next_generation(pop: PopulationRef) =
   # mutate
 
   for gene in pop.pool:
-    gene.mutate(pop.mutate_prob)
+    if rand(1.0) < pop.mutate_prob:
+      gene.mutate()
+
     gene.calc_cost(pop.goal)
 
   pop.solved = pop.pool.any(g => g.cost == 0)
@@ -149,7 +150,8 @@ proc display(pop: PopulationRef) =
 let population = PopulationRef(
   goal: "Attention is all you need",
   size: 20,
-  keep_fittest_frac: 0.25
+  keep_fittest_frac: 0.25,
+  mutate_prob: 0.5
 )
 
 # while not solved, do another generation
