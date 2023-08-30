@@ -41,7 +41,7 @@ proc mutate(gene: GeneRef, prob: float) =
 
 proc mate(gene1, gene2: GeneRef): GeneRef = 
   assert gene1.code.len == gene2.code.len
-  let pivot = floor_div(gene1.code.len, 2)
+  let pivot = rand(1..(gene1.code.len - 2))
   let new_code = gene1.code[0..<pivot] & gene2.code[pivot..^1]
   return GeneRef(code: new_code)
 
@@ -52,7 +52,7 @@ proc calc_cost(gene: GeneRef, goal: string) =
 
   for i in 0..<len(goal):
     let diff: int = ord(goal[i]) - ord(gene.code[i])
-    cost += int(pow(float(diff), 2))
+    cost += pow(diff.float, 2).int
 
   gene.cost = cost
 
@@ -67,7 +67,7 @@ type
     pool: seq[GeneRef]
     goal: string 
     generation: int
-    elitism_frac: float = 1.0
+    keep_fittest_frac: float = 1.0
     mutate_prob: float = 0.5
     solved: bool = false
   PopulationRef = ref Population
@@ -83,7 +83,7 @@ proc sort_by_fitness(pop: PopulationRef) =
 
 proc keep_fittest(pop: PopulationRef) =
   pop.sort_by_fitness()
-  let num_survive: int = (pop.size.float * pop.elitism_frac).float.int
+  let num_survive: int = (pop.size.float * pop.keep_fittest_frac).float.int
   pop.pool = pop.pool[0..<num_survive]
 
 proc breed_fittest(pop: PopulationRef) =
@@ -91,6 +91,7 @@ proc breed_fittest(pop: PopulationRef) =
   assert pop.pool.len >= 2
 
   while len(pop.pool) < pop.size:
+    pop.pool.shuffle()
     let child = mate(pop.pool[0], pop.pool[1])
     assert child.code.len == pop.goal.len
     pop.pool.add(child)
@@ -148,7 +149,7 @@ proc display(pop: PopulationRef) =
 let population = PopulationRef(
   goal: "Attention is all you need",
   size: 20,
-  elitism_frac: 0.3
+  keep_fittest_frac: 0.25
 )
 
 # while not solved, do another generation
