@@ -87,7 +87,6 @@ proc keep_fittest(pop: PopulationRef) =
   pop.pool = pop.pool[0..<num_survive]
 
 proc breed_fittest(pop: PopulationRef) =
-  pop.sort_by_fitness()
   assert pop.pool.len >= 2
 
   while len(pop.pool) < pop.size:
@@ -114,7 +113,7 @@ proc next_generation(pop: PopulationRef) =
 
   pop.keep_fittest()
 
-  # breed the top two genes
+  # breed the fittest
 
   pop.breed_fittest()
 
