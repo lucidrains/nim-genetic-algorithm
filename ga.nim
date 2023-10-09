@@ -144,17 +144,21 @@ proc display(pop: PopulationRef) =
 
   echo "\n"
 
-# create a gene population
+proc main() = 
+  # create a gene population
 
-let population = PopulationRef(
-  goal: "Attention is all you need",
-  size: 20,
-  keep_fittest_frac: 0.25,
-  mutate_prob: 0.5
-)
+  let population = PopulationRef(
+    goal: "Attention is all you need",
+    size: 20,
+    keep_fittest_frac: 0.25,
+    mutate_prob: 0.5
+  )
 
-# while not solved, do another generation
+  # while not solved, do another generation
 
-while not population.solved:
-  population.next_generation()
-  population.display()
+  while not population.solved:
+    population.next_generation()
+    population.display()
+
+when is_main_module:
+  main()
