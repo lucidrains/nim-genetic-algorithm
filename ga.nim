@@ -124,10 +124,6 @@ proc next_generation(pop: PopulationRef) =
     if rand(1.0) < pop.mutate_prob:
       gene.mutate()
 
-  # sort
-
-  pop.sort_by_fitness()
-
   # calculate fitness
 
   var master = create_master()
@@ -140,6 +136,10 @@ proc next_generation(pop: PopulationRef) =
   for i in 0..<pop.pool.len:
     let gene = pop.pool[i]
     gene.cost = costs[i]
+
+  # sort
+
+  pop.sort_by_fitness()
 
   # determine solved
 
