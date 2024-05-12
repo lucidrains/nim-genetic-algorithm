@@ -17,11 +17,11 @@ type
     cost: int = 1e7.int
   GeneRef = ref Gene
 
-proc randomize(gene: GeneRef, length: int) =
+proc init_random_code(gene: GeneRef, length: int) =
   assert length > 2
 
   while len(gene.code) < length:
-    gene.code = gene.code & chr(rand(255))
+    gene.code = gene.code & rand(255).chr
 
 # finds a random index in the code and adds or subtracts 1 from the ord randomly
 
@@ -32,10 +32,10 @@ proc mutate(gene: GeneRef) =
   var code_seq_char = cast[seq[char]](gene.code)
   let char_at_index = code_seq_char[rand_index]
 
-  var char_code = ord(char_at_index) + mutation
-  char_code = min(max(char_code, 0), 255)
+  var char_code = char_at_index.ord + mutation
+  char_code = char_code.max(0).min(255)
 
-  code_seq_char[rand_index] = chr(char_code)
+  code_seq_char[rand_index] = char_code.chr
   gene.code = cast[string](code_seq_char)
 
 # recombine genetic codes
@@ -52,7 +52,7 @@ func calc_cost(code: string, goal: string): int =
   var cost: int = 0
 
   for i in 0..<len(goal):
-    let diff: int = ord(goal[i]) - ord(code[i])
+    let diff: int = goal[i].ord - code[i].ord
     cost += pow(diff.float, 2).int
 
   return cost
@@ -79,7 +79,7 @@ proc sort_by_fitness(pop: PopulationRef) =
 proc init_population(pop: PopulationRef) =
   for _ in 0..<pop.size:
     let gene = GeneRef()
-    randomize(gene, len(pop.goal))
+    gene.init_random_code(pop.goal.len)
     pop.pool.add(gene)
 
   sort_by_fitness(pop)
@@ -154,10 +154,10 @@ proc next_generation(pop: PopulationRef) =
 proc display(pop: PopulationRef) =
   erase_screen()
 
-  echo fmt"generation: {pop.generation}", "\n"
+  echo &"generation: {pop.generation}", "\n"
 
   for gene in pop.pool:
-    echo fmt"{gene.code} ({gene.cost})"
+    echo &"{gene.code} ({gene.cost})"
 
   echo "\n"
 
@@ -166,7 +166,7 @@ proc main() =
 
   let population = PopulationRef(
     goal: "Attention is all you need",
-    size: 20,
+    size: 25,
     keep_fittest_frac: 0.25,
     mutate_prob: 0.5
   )
