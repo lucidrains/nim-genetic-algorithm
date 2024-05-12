@@ -2,6 +2,7 @@ assert NimMajor >= 2, "must be nim 2.0"
 
 # imports
 
+import malebolgia
 import std/[math, random, terminal, strformat, algorithm, sequtils, sugar]
 
 # init
@@ -45,16 +46,16 @@ proc mate(gene1, gene2: GeneRef): GeneRef =
   let new_code = gene1.code[0..<pivot] & gene2.code[pivot..^1]
   return GeneRef(code: new_code)
 
-proc calc_cost(gene: GeneRef, goal: string) =
-  assert len(gene.code) == len(goal)
+func calc_cost(code: string, goal: string): int =
+  assert len(code) == len(goal)
 
   var cost: int = 0
 
   for i in 0..<len(goal):
-    let diff: int = ord(goal[i]) - ord(gene.code[i])
+    let diff: int = ord(goal[i]) - ord(code[i])
     cost += pow(diff.float, 2).int
 
-  gene.cost = cost
+  return cost
 
 proc cmp_genes(gene1, gene2: GeneRef): int =
   gene1.cost - gene2.cost
@@ -72,14 +73,16 @@ type
     solved: bool = false
   PopulationRef = ref Population
 
+proc sort_by_fitness(pop: PopulationRef) =
+  pop.pool.sort(cmp_genes, Ascending)
+
 proc init_population(pop: PopulationRef) =
   for _ in 0..<pop.size:
     let gene = GeneRef()
     randomize(gene, len(pop.goal))
     pop.pool.add(gene)
 
-proc sort_by_fitness(pop: PopulationRef) =
-  pop.pool.sort(cmp_genes, Ascending)
+  sort_by_fitness(pop)
 
 proc keep_fittest(pop: PopulationRef) =
   pop.sort_by_fitness()
@@ -99,15 +102,13 @@ proc breed_fittest(pop: PopulationRef) =
 
 proc next_generation(pop: PopulationRef) =
 
+  if pop.solved:
+    return
+
   # if population not started, initialize with random genes
 
   if pop.generation == 0:
     init_population(pop)
-
-  # calculate fitness
-
-  for gene in pop.pool:
-    gene.calc_cost(pop.goal)
 
   # keep only the fittest
 
@@ -123,12 +124,28 @@ proc next_generation(pop: PopulationRef) =
     if rand(1.0) < pop.mutate_prob:
       gene.mutate()
 
-    gene.calc_cost(pop.goal)
+  # sort
 
-  pop.solved = pop.pool.any(g => g.cost == 0)
+  pop.sort_by_fitness()
 
-  if pop.solved:
-    pop.sort_by_fitness()
+  # calculate fitness
+
+  var master = create_master()
+  var costs = new_seq[int](pop.pool.len)
+
+  master.await_all:
+    for i in 0..<pop.pool.len:
+      master.spawn calc_cost(pop.pool[i].code, pop.goal) -> costs[i]
+
+  for i in 0..<pop.pool.len:
+    let gene = pop.pool[i]
+    gene.cost = costs[i]
+
+  # determine solved
+
+  pop.solved = pop.pool[0].cost == 0
+
+  # increment generation
 
   pop.generation += 1
 
