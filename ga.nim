@@ -25,17 +25,23 @@ proc init_random_code(gene: GeneRef, length: int) =
 
 # finds a random index in the code and adds or subtracts 1 from the ord randomly
 
-proc mutate(gene: GeneRef) =
-  let rand_index = rand(gene.code.len - 1)
-  let mutation = (if rand(1.0) < 0.5: 1 else: -1)
+proc mutate(gene: GeneRef, mutate_rate: float) =
 
   var code_seq_char = cast[seq[char]](gene.code)
-  let char_at_index = code_seq_char[rand_index]
 
-  var char_code = char_at_index.ord + mutation
-  char_code = char_code.max(0).min(255)
+  for i in 0..<gene.code.len:
+    if rand(1.0) > mutate_rate:
+      continue
 
-  code_seq_char[rand_index] = char_code.chr
+    let mutation = (if rand(1.0) < 0.5: 1 else: -1)
+
+    let char_at_index = code_seq_char[i]
+
+    var char_code = char_at_index.ord + mutation
+    char_code = char_code.max(0).min(255)
+
+    code_seq_char[i] = char_code.chr
+
   gene.code = cast[string](code_seq_char)
 
 # recombine genetic codes
@@ -70,6 +76,7 @@ type
     generation: int
     keep_fittest_frac: float = 1.0
     mutate_prob: float = 0.5
+    mutate_rate: float = 0.1
     solved: bool = false
   PopulationRef = ref Population
 
@@ -122,7 +129,7 @@ proc next_generation(pop: PopulationRef) =
 
   for gene in pop.pool:
     if rand(1.0) < pop.mutate_prob:
-      gene.mutate()
+      gene.mutate(pop.mutate_rate)
 
   # calculate fitness
 
@@ -168,7 +175,8 @@ proc main() =
     goal: "Attention is all you need",
     size: 25,
     keep_fittest_frac: 0.25,
-    mutate_prob: 0.5
+    mutate_prob: 0.5,
+    mutate_rate: 0.1
   )
 
   # while not solved, do another generation
