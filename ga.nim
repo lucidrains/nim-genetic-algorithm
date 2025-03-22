@@ -9,6 +9,42 @@ import std/[math, random, terminal, strformat, algorithm, sequtils, sugar]
 
 randomize()
 
+# functions related for sampling mutation length from power law distribution
+
+proc cumsum(x: seq[float]): seq[float] =
+  var sum = 0.0
+
+  for el in x:
+    sum += el
+    result.add(sum)
+
+proc sample(cdf: seq[float]): int =
+  var n = cdf.len
+  var x = rand(1.0)
+
+  if x < cdf[0]:
+    return 1
+
+  var lo = 0
+  var hi = n - 1
+
+  while (hi - lo) > 1:
+    var mid = floor_div(lo + hi, 2)
+
+    if x > cdf[mid]:
+      lo = mid
+    else:
+      hi = mid
+
+  return hi + 1
+
+proc log1p(x: float): float =
+  return ln(1 + x)
+
+proc sample_waiting_time(prob: float): int =
+  var rand_prob = rand(1.0)
+  return 1 + (log1p(-rand_prob) / log1p(-prob)).floor.int
+
 # gene
 
 type
@@ -25,24 +61,82 @@ proc init_random_code(gene: GeneRef, length: int) =
 
 # finds a random index in the code and adds or subtracts 1 from the ord randomly
 
-proc mutate(gene: GeneRef, mutate_rate: float) =
+type
+  MutateOperatorType = enum
+    DefaultMutateOperator,
+    FastMutateOperator
+
+  MutateOperator = object
+    gene_length: int = 0
+
+    case kind: MutateOperatorType
+      of DefaultMutateOperator:
+        mutate_rate: float = 0.1
+
+      of FastMutateOperator:
+        beta: float = 1.5
+        power_law: seq[float]
+
+  MutateOperatorRef = ref MutateOperator
+
+proc init(mutate_operator: MutateOperatorRef, gene_length: int) =
+  mutate_operator.gene_length = gene_length
+
+  case mutate_operator.kind:
+  of FastMutateOperator:
+    var beta = mutate_operator.beta
+    var half_gene_length = floor_div(gene_length, 2)
+
+    var power_law = to_seq(1..half_gene_length).map(x => x.float)
+
+    power_law = power_law.map(value => value.pow(-beta))
+    power_law = cumsum(power_law)
+    power_law = power_law.map(value => value / power_law[^1])
+
+    mutate_operator.power_law = power_law
+
+  else:
+    discard
+
+proc mutate(mutate_operator: MutateOperatorRef, gene: GeneRef) =
 
   var code_seq_char = cast[seq[char]](gene.code)
+  var gene_length = gene.code.len
 
-  for i in 0..<gene.code.len:
-    if rand(1.0) > mutate_rate:
-      continue
+  case mutate_operator.kind:
+  of DefaultMutateOperator:
 
-    let mutation = (if rand(1.0) < 0.5: 1 else: -1)
+    for i in 0..<gene_length:
+      if rand(1.0) > mutate_operator.mutate_rate:
+        continue
 
-    let char_at_index = code_seq_char[i]
+      let mutation = (if rand(1.0) < 0.5: 1 else: -1)
 
-    var char_code = char_at_index.ord + mutation
-    char_code = char_code.max(0).min(255)
+      let char_at_index = code_seq_char[i]
 
-    code_seq_char[i] = char_code.chr
+      var char_code = char_at_index.ord + mutation
+      char_code = char_code.max(0).min(255)
+
+      code_seq_char[i] = char_code.chr
+
+  else:
+
+    let mutate_rate = sample(mutate_operator.power_law) / gene_length
+    var index = sample_waiting_time(mutate_rate) - 1
+
+    while index < gene_length:
+
+      let mutation = (if rand(1.0) < 0.5: 1 else: -1)
+      let char_at_index = code_seq_char[index]
+      var char_code = char_at_index.ord + mutation
+
+      char_code = char_code.max(0).min(255)
+      code_seq_char[index] = char_code.chr
+
+      index += sample_waiting_time(mutate_rate)
 
   gene.code = cast[string](code_seq_char)
+
 
 # recombine genetic codes
 
@@ -75,21 +169,26 @@ type
     goal: string 
     generation: int
     keep_fittest_frac: float = 1.0
-    mutate_prob: float = 0.5
-    mutate_rate: float = 0.1
     solved: bool = false
+    mutate_prob: float = 0.5
+    mutate_operator: MutateOperatorRef
+
   PopulationRef = ref Population
 
 proc sort_by_fitness(pop: PopulationRef) =
   pop.pool.sort(cmp_genes, Ascending)
 
 proc init_population(pop: PopulationRef) =
+
+  var gene_length = pop.goal.len
+
   for _ in 0..<pop.size:
     let gene = GeneRef()
-    gene.init_random_code(pop.goal.len)
+    gene.init_random_code(gene_length)
     pop.pool.add(gene)
 
   sort_by_fitness(pop)
+  pop.mutate_operator.init(gene_length)
 
 proc keep_fittest(pop: PopulationRef) =
   pop.sort_by_fitness()
@@ -129,7 +228,7 @@ proc next_generation(pop: PopulationRef) =
 
   for gene in pop.pool:
     if rand(1.0) < pop.mutate_prob:
-      gene.mutate(pop.mutate_rate)
+      pop.mutate_operator.mutate(gene)
 
   # calculate fitness
 
@@ -169,21 +268,48 @@ proc display(pop: PopulationRef) =
   echo "\n"
 
 proc main() = 
-  # create a gene population
 
-  let population = PopulationRef(
-    goal: "Attention is all you need",
-    size: 25,
-    keep_fittest_frac: 0.25,
-    mutate_prob: 0.5,
-    mutate_rate: 0.1
-  )
+  let trials = 100
+  let use_fast_mutate = true
+  var avg_generation = 0.0
 
-  # while not solved, do another generation
+  var mutate_operator: MutateOperatorRef
 
-  while not population.solved:
-    population.next_generation()
-    population.display()
+  if use_fast_mutate:
+    mutate_operator = MutateOperatorRef(
+      kind: FastMutateOperator,
+      beta: 1.2
+    )
+  else:
+    mutate_operator = MutateOperatorRef(
+      kind: DefaultMutateOperator,
+      mutate_rate: 0.1
+    )
+
+  # do many trials and average generation at solving
+
+  for trial in 1..trials:
+
+    # create a gene population
+
+    let population = PopulationRef(
+      goal: "Attention is all you need",
+      size: 25,
+      keep_fittest_frac: 0.25,
+      mutate_prob: 0.9,
+      mutate_operator: mutate_operator
+    )
+
+    # while not solved, do another generation
+
+    while not population.solved:
+      population.next_generation()
+
+    avg_generation += population.generation / trials
+
+    echo &"trial {trial} completed at generation {population.generation}"
+
+  echo &"average generation: {avg_generation.int}"
 
 when is_main_module:
   main()
